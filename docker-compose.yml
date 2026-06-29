@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./server
+    ports:
+      - "4001:4001"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - PORT=4001
+      - AI_MODEL=${AI_MODEL:-openai/gpt-3.5-turbo}
+      - VISION_MODEL=${VISION_MODEL:-openai/gpt-4o}
+    volumes:
+      - ./server/chat.db:/app/chat.db
+      - ./server/uploads:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build: ./client
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
