@@ -6,3 +6,4 @@ build/
 *.log
 .cache/
 .pnpm-store/
+smoke-test/
