@@ -44,7 +44,19 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
-// Get uploaded files
+// Serve uploaded files
+app.use('/uploads', express.static(uploadsDir));
+
+// Delete uploaded file
+app.delete('/api/files/:name', (req, res) => {
+  const filePath = path.join(uploadsDir, req.params.name);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
 app.get('/api/files', (req, res) => {
   const files = fs.readdirSync(uploadsDir).map(f => ({
     name: f,
@@ -57,11 +69,21 @@ app.get('/api/files', (req, res) => {
 // SQLite DB
 const db = new Database('./chat.db');
 db.exec(`
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    favorite INTEGER DEFAULT 0,
+    folder TEXT,
+    created_at INTEGER DEFAULT (unixepoch()),
+    updated_at INTEGER DEFAULT (unixepoch())
+  );
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
-    timestamp INTEGER DEFAULT (unixepoch())
+    timestamp INTEGER DEFAULT (unixepoch()),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
   );
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -71,9 +93,61 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     key TEXT NOT NULL,
     value TEXT NOT NULL,
+    pinned INTEGER DEFAULT 0,
     timestamp INTEGER DEFAULT (unixepoch())
   );
 `);
+
+// Migrations for existing tables
+const convoColumns = db.prepare("PRAGMA table_info(conversations)").all();
+if (!convoColumns.some(c => c.name === 'favorite')) {
+  db.prepare('ALTER TABLE conversations ADD COLUMN favorite INTEGER DEFAULT 0').run();
+}
+if (!convoColumns.some(c => c.name === 'folder')) {
+  db.prepare('ALTER TABLE conversations ADD COLUMN folder TEXT').run();
+}
+const memColumns = db.prepare("PRAGMA table_info(memories)").all();
+if (!memColumns.some(c => c.name === 'pinned')) {
+  db.prepare('ALTER TABLE memories ADD COLUMN pinned INTEGER DEFAULT 0').run();
+}
+
+// Conversations
+app.get('/api/conversations', (req, res) => {
+  const { q } = req.query;
+  let rows;
+  if (q) {
+    rows = db.prepare("SELECT * FROM conversations WHERE title LIKE ? ORDER BY favorite DESC, updated_at DESC").all(`%${q}%`);
+  } else {
+    rows = db.prepare('SELECT * FROM conversations ORDER BY favorite DESC, updated_at DESC').all();
+  }
+  res.json(rows);
+});
+
+app.post('/api/conversations', (req, res) => {
+  const { title } = req.body;
+  const result = db.prepare('INSERT INTO conversations (title) VALUES (?)').run(title || 'New Chat');
+  res.json({ id: result.lastInsertRowid });
+});
+
+app.patch('/api/conversations/:id', (req, res) => {
+  const { title, favorite, folder } = req.body;
+  const updates = [];
+  const params = [];
+  if (title !== undefined) { updates.push('title = ?'); params.push(title); }
+  if (favorite !== undefined) { updates.push('favorite = ?'); params.push(favorite ? 1 : 0); }
+  if (folder !== undefined) { updates.push('folder = ?'); params.push(folder); }
+  if (updates.length > 0) {
+    params.push(req.params.id);
+    db.prepare(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ success: true });
+});
+
+app.delete('/api/conversations/:id', (req, res) => {
+  db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
 
 // Get messages
 app.get('/api/messages', (req, res) => {
@@ -83,7 +157,13 @@ app.get('/api/messages', (req, res) => {
 
 // Memory endpoints
 app.get('/api/memories', (req, res) => {
-  const rows = db.prepare('SELECT * FROM memories ORDER BY timestamp DESC').all();
+  const { q } = req.query;
+  let rows;
+  if (q) {
+    rows = db.prepare("SELECT * FROM memories WHERE key LIKE ? OR value LIKE ? ORDER BY pinned DESC, timestamp DESC").all(`%${q}%`, `%${q}%`);
+  } else {
+    rows = db.prepare('SELECT * FROM memories ORDER BY pinned DESC, timestamp DESC').all();
+  }
   res.json(rows);
 });
 
@@ -91,6 +171,18 @@ app.post('/api/memories', (req, res) => {
   const { key, value } = req.body;
   const result = db.prepare('INSERT INTO memories (key, value) VALUES (?, ?)').run(key, value);
   res.json({ id: result.lastInsertRowid });
+});
+
+app.patch('/api/memories/:id', (req, res) => {
+  const { key, value } = req.body;
+  db.prepare('UPDATE memories SET key = ?, value = ? WHERE id = ?').run(key, value, req.params.id);
+  res.json({ success: true });
+});
+
+app.patch('/api/memories/:id/pin', (req, res) => {
+  const { pinned } = req.body;
+  db.prepare('UPDATE memories SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, req.params.id);
+  res.json({ success: true });
 });
 
 app.delete('/api/memories/:id', (req, res) => {
@@ -172,6 +264,35 @@ app.post('/api/vision', async (req, res) => {
   }
 });
 
+// Web search endpoint (DuckDuckGo fallback)
+app.get('/api/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'Missing query' });
+
+  try {
+    const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NexusAI/1.0)' }
+    });
+    const html = await response.text();
+
+    const results = [];
+    const regex = /<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)<\/a>.*?<a class="result__snippet"[^>]*>([^<]+)<\/a>/gs;
+    let match;
+    while ((match = regex.exec(html)) && results.length < 5) {
+      results.push({
+        title: match[2].replace(/<[^>]+>/g, '').trim(),
+        url: match[1].trim(),
+        snippet: match[3].replace(/<[^>]+>/g, '').trim()
+      });
+    }
+
+    res.json({ results });
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', port: process.env.PORT || 4001 });
@@ -183,6 +304,10 @@ io.on('connection', (socket) => {
 
   socket.on('chat-message', async (data) => {
     const { message, history } = data;
+
+    // Get current model from settings
+    const modelRow = db.prepare("SELECT value FROM settings WHERE key = 'model'").get();
+    const model = modelRow?.value || process.env.AI_MODEL || 'openai/gpt-3.5-turbo';
     
     // Save user message
     db.prepare('INSERT INTO messages (role, content) VALUES (?, ?)').run('user', message);
@@ -198,12 +323,13 @@ io.on('connection', (socket) => {
           'X-Title': 'AI Multimodal Assistant'
         },
     body: JSON.stringify({
-      model: process.env.AI_MODEL || 'openai/gpt-3.5-turbo',
+      model,
       messages: [
         ...history.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: message }
       ],
-      stream: true
+      stream: true,
+      max_tokens: 500
     })
       });
 
@@ -229,6 +355,7 @@ io.on('connection', (socket) => {
           if (data === '[DONE]') continue;
           try {
             const parsed = JSON.parse(data);
+            console.log('CHUNK', JSON.stringify(parsed.choices?.[0]?.delta));
             const content = parsed.choices?.[0]?.delta?.content || '';
             if (content) {
               aiResponse += content;

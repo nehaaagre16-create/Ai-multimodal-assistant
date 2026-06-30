@@ -1,37 +1,96 @@
-import { useState, useEffect } from 'react'
-import { Save, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Save, Check, Volume2 } from 'lucide-react'
+
+const VOICE_PRESETS = [
+  { key: 'default', label: 'System Default' },
+  { key: 'male', label: 'Male' },
+  { key: 'female', label: 'Female' },
+]
+
+const MODEL_OPTIONS = [
+  'openai/gpt-3.5-turbo',
+  'anthropic/claude-3-haiku',
+]
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
-    apiKey: '',
     model: 'openai/gpt-3.5-turbo',
     voice: 'default',
     theme: 'dark',
     autoTTS: false,
+    voiceSpeed: 1,
+    voicePitch: 1,
   })
+  const [voices, setVoices] = useState([])
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const synthRef = useRef(window.speechSynthesis)
+
+  useEffect(() => {
+    const loadVoices = () => setVoices(synthRef.current?.getVoices() || [])
+    loadVoices()
+    if (synthRef.current?.onvoiceschanged !== undefined) {
+      synthRef.current.onvoiceschanged = loadVoices
+    }
+  }, [])
 
   useEffect(() => {
     fetch('http://localhost:4001/api/settings')
       .then(r => r.json())
       .then(data => {
-        setSettings(prev => ({ ...prev, ...data }))
+        const normalized = { ...data }
+        if (normalized.autoTTS !== undefined) {
+          normalized.autoTTS = normalized.autoTTS === 'true' || normalized.autoTTS === true
+        }
+        if (normalized.voiceSpeed) normalized.voiceSpeed = parseFloat(normalized.voiceSpeed)
+        if (normalized.voicePitch) normalized.voicePitch = parseFloat(normalized.voicePitch)
+        setSettings(prev => ({ ...prev, ...normalized }))
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
-  const handleSave = () => {
-    Object.entries(settings).forEach(([key, value]) => {
-      fetch('http://localhost:4001/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value }),
-      }).catch(() => {})
-    })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const handleSave = async () => {
+    try {
+      await Promise.all(
+        Object.entries(settings).map(([key, value]) => {
+          const storedValue = typeof value === 'boolean' ? String(value) : String(value)
+          return fetch('http://localhost:4001/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, value: storedValue }),
+          }).then(r => {
+            if (!r.ok) throw new Error(`Failed to save ${key}: ${r.status}`)
+          })
+        })
+      )
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      console.error('Save failed:', err)
+      alert('Failed to save settings. Is the backend running?')
+    }
+  }
+
+  const previewVoice = () => {
+    if (!synthRef.current) return
+    synthRef.current.cancel()
+    const text = 'Hello, I am Nexus AI. This is your selected voice.'
+    const utter = new SpeechSynthesisUtterance(text)
+    utter.rate = settings.voiceSpeed
+    utter.pitch = settings.voicePitch
+    const allVoices = synthRef.current.getVoices()
+    const preset = VOICE_PRESETS.find(v => v.key === settings.voice)
+    if (settings.voice === 'male') {
+      const maleVoice = allVoices.find(v => v.name.toLowerCase().includes('male'))
+        || allVoices.find(v => /david|mark|james|alex|daniel/i.test(v.name))
+      if (maleVoice) utter.voice = maleVoice
+    } else if (settings.voice === 'female') {
+      const femaleVoice = allVoices.find(v => v.name.toLowerCase().includes('female'))
+        || allVoices.find(v => /zira|jenny|linda|samantha|victoria/i.test(v.name))
+      if (femaleVoice) utter.voice = femaleVoice
+    }
+    synthRef.current.speak(utter)
   }
 
   if (loading) {
@@ -51,15 +110,65 @@ export default function SettingsPage() {
           label="AI Model"
           value={settings.model}
           onChange={(v) => setSettings({ ...settings, model: v })}
-          options={['openai/gpt-3.5-turbo', 'openai/gpt-4', 'anthropic/claude-3-haiku']}
+          options={MODEL_OPTIONS}
         />
 
         <SettingRow
           label="Voice"
           value={settings.voice}
           onChange={(v) => setSettings({ ...settings, voice: v })}
-          options={['default', 'male', 'female']}
+          options={VOICE_PRESETS.map(v => v.key)}
+          optionLabels={VOICE_PRESETS.reduce((acc, v) => ({ ...acc, [v.key]: v.label }), {})}
         />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 14, fontWeight: 500, color: '#A3A3A3' }}>Voice Speed</label>
+          <input
+            type="range"
+            min={0.5}
+            max={2}
+            step={0.1}
+            value={settings.voiceSpeed}
+            onChange={(e) => setSettings({ ...settings, voiceSpeed: parseFloat(e.target.value) })}
+            style={rangeStyle}
+          />
+          <div style={{ fontSize: 12, color: '#737373' }}>{settings.voiceSpeed.toFixed(1)}x</div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 14, fontWeight: 500, color: '#A3A3A3' }}>Voice Pitch</label>
+          <input
+            type="range"
+            min={0.5}
+            max={2}
+            step={0.1}
+            value={settings.voicePitch}
+            onChange={(e) => setSettings({ ...settings, voicePitch: parseFloat(e.target.value) })}
+            style={rangeStyle}
+          />
+          <div style={{ fontSize: 12, color: '#737373' }}>{settings.voicePitch.toFixed(1)}x</div>
+        </div>
+
+        <button
+          onClick={previewVoice}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 18px',
+            borderRadius: 10,
+            border: '1px solid #2A2A2A',
+            background: '#141414',
+            color: '#A3A3A3',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+          }}
+        >
+          <Volume2 size={16} />
+          Preview Voice
+        </button>
 
         <ToggleRow
           label="Auto TTS"
@@ -67,17 +176,6 @@ export default function SettingsPage() {
           onChange={(v) => setSettings({ ...settings, autoTTS: v })}
           desc="Automatically speak AI replies aloud"
         />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ fontSize: 14, fontWeight: 500, color: '#A3A3A3' }}>API Key</label>
-          <input
-            type="password"
-            value={settings.apiKey}
-            onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
-            placeholder="OpenRouter API key..."
-            style={inputStyle}
-          />
-        </div>
       </div>
 
       <button
@@ -105,7 +203,7 @@ export default function SettingsPage() {
   )
 }
 
-function SettingRow({ label, value, onChange, options }) {
+function SettingRow({ label, value, onChange, options, optionLabels = {} }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <label style={{ fontSize: 14, fontWeight: 500, color: '#A3A3A3' }}>{label}</label>
@@ -114,7 +212,7 @@ function SettingRow({ label, value, onChange, options }) {
         onChange={(e) => onChange(e.target.value)}
         style={inputStyle}
       >
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map(o => <option key={o} value={o}>{optionLabels[o] || o}</option>)}
       </select>
     </div>
   )
@@ -164,4 +262,10 @@ const inputStyle = {
   fontSize: 14,
   outline: 'none',
   width: '100%',
+}
+
+const rangeStyle = {
+  width: '100%',
+  accentColor: '#00D4FF',
+  background: '#141414',
 }

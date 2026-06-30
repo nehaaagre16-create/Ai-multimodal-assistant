@@ -1,19 +1,28 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { io } from 'socket.io-client'
-import Sidebar from './components/Sidebar'
+import Layout from './components/Layout'
+import LeftSidebar from './components/LeftSidebar'
+import RightSidebar from './components/RightSidebar'
 import LandingPage from './pages/LandingPage'
 import ChatPage from './pages/ChatPage'
 import VisionPage from './pages/VisionPage'
 import SettingsPage from './pages/SettingsPage'
 import ProfilePage from './pages/ProfilePage'
+import HistoryPage from './pages/HistoryPage'
+import MemoryPage from './pages/MemoryPage'
+import FilesPage from './pages/FilesPage'
 
 const socket = io('http://localhost:4001')
 
 function App() {
   const [messages, setMessages] = useState([])
   const [isAiResponding, setIsAiResponding] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isListening, setIsListening] = useState(false)
   const [currentPage, setCurrentPage] = useState('landing')
+  const [cameraOn, setCameraOn] = useState(false)
+  const [avatarPreset, setAvatarPreset] = useState('nexus')
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -70,26 +79,59 @@ function App() {
       .catch(() => setMessages([]))
   }
 
+  const handleNavigate = (path) => {
+    navigate(path)
+  }
+
+  const handleNewChat = () => {
+    clearChat()
+    navigate('/chat')
+  }
+
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0A0A0A', color: '#F5F5F5', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-      <Sidebar currentPage={currentPage} onNavigate={(page) => navigate(page === 'landing' ? '/' : '/' + page)} />
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Routes>
-          <Route path="/" element={<LandingPage onStartChat={() => navigate('/chat')} />} />
-          <Route path="/chat" element={
-            <ChatPage
-              messages={messages}
-              isAiResponding={isAiResponding}
-              onSend={sendMessage}
-              onClear={clearChat}
-            />
-          } />
-          <Route path="/vision" element={<VisionPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Routes>
-      </div>
-    </div>
+    <Layout
+      leftSidebar={
+        <LeftSidebar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          onNewChat={handleNewChat}
+        />
+      }
+      rightSidebar={
+        <RightSidebar
+          isAiResponding={isAiResponding}
+          isSpeaking={isSpeaking}
+          isListening={isListening}
+          cameraOn={cameraOn}
+        />
+      }
+    >
+      <Routes>
+        <Route path="/" element={<LandingPage onStartChat={() => navigate('/chat')} />} />
+        <Route path="/chat" element={
+          <ChatPage
+            messages={messages}
+            isAiResponding={isAiResponding}
+            onSend={sendMessage}
+            onClear={clearChat}
+            cameraOn={cameraOn}
+            onCameraToggle={setCameraOn}
+            isSpeaking={isSpeaking}
+            setIsSpeaking={setIsSpeaking}
+            isListening={isListening}
+            setIsListening={setIsListening}
+            avatarPreset={avatarPreset}
+            onAvatarChange={setAvatarPreset}
+          />
+        } />
+        <Route path="/vision" element={<VisionPage cameraOn={cameraOn} onCameraToggle={setCameraOn} />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/memory" element={<MemoryPage />} />
+        <Route path="/files" element={<FilesPage />} />
+      </Routes>
+    </Layout>
   )
 }
 

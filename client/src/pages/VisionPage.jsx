@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Camera, CameraOff, Send, Eye, Loader2, ImagePlus, X, Monitor, MonitorOff } from 'lucide-react'
 
-export default function VisionPage() {
-  const [cameraOn, setCameraOn] = useState(false)
+export default function VisionPage({ cameraOn: parentCameraOn, onCameraToggle }) {
+  const [cameraOn, setCameraOn] = useState(parentCameraOn || false)
   const [screenOn, setScreenOn] = useState(false)
   const [capturedImage, setCapturedImage] = useState(null)
   const [messages, setMessages] = useState([])
@@ -13,6 +13,10 @@ export default function VisionPage() {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const messagesEndRef = useRef(null)
+
+  useEffect(() => {
+    onCameraToggle(cameraOn || screenOn)
+  }, [cameraOn, screenOn, onCameraToggle])
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   useEffect(() => scrollToBottom(), [messages])
