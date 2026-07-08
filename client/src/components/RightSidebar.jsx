@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Mic, Eye, Brain, Zap, Activity, Wifi } from 'lucide-react'
 import ToolsPanel from './ToolsPanel'
+import API_BASE from '../config/api';
 
-export default function RightSidebar({ isAiResponding, isListening, isSpeaking, latency = 0, cameraOn = false }) {
+export default function RightSidebar({ isAiResponding, isListening, isSpeaking, latency = 0, cameraOn = false, onWhiteboard, onScreenshot }) {
   const [stats, setStats] = useState({ messages: 0, conversations: 0 })
 
   useEffect(() => {
-    fetch('http://localhost:4001/api/messages')
+    fetch(`${API_BASE}/api/messages`)
       .then(r => r.json())
       .then(data => setStats(prev => ({ ...prev, messages: data.length })))
       .catch(() => {})
@@ -73,10 +74,8 @@ export default function RightSidebar({ isAiResponding, isListening, isSpeaking, 
       </div>
 
       <ToolsPanel
-        onUpload={() => window.location.href = '/files'}
-        onSearch={() => alert('Web search tool — type a query in chat and the AI will search if needed.')}
-        onScreenshot={() => alert('Screenshot tool — use the Vision page to capture your screen.')}
-        onWhiteboard={() => alert('Whiteboard tool — coming in next iteration.')}
+        onScreenshot={onScreenshot}
+        onWhiteboard={onWhiteboard}
       />
 
       {/* Current Mode */}

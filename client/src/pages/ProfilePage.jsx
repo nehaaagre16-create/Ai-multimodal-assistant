@@ -1,12 +1,22 @@
-import { useState } from 'react'
-import { User, Mail, Calendar, Activity } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Mail, Calendar, Activity, MessageSquare, Folder, Heart } from 'lucide-react'
+import API_BASE from '../config/api';
 
 export default function ProfilePage() {
-  const [stats] = useState({
-    messagesSent: 0,
-    voiceUsed: 0,
-    joinedDate: new Date().toLocaleDateString(),
+  const [stats, setStats] = useState({
+    messages: 0,
+    conversations: 0,
+    memories: 0,
+    files: 0,
+    joinedDate: new Date().toISOString().split('T')[0],
   })
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/profile/stats`)
+      .then(r => r.json())
+      .then(data => setStats(data))
+      .catch(() => {})
+  }, [])
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 600, overflowY: 'auto', height: '100vh' }}>
@@ -43,8 +53,10 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        <StatCard icon={Activity} label="Messages" value={stats.messagesSent} />
-        <StatCard icon={Activity} label="Voice Used" value={stats.voiceUsed} />
+        <StatCard icon={MessageSquare} label="Messages" value={stats.messages} />
+        <StatCard icon={Folder} label="Conversations" value={stats.conversations} />
+        <StatCard icon={Heart} label="Memories" value={stats.memories} />
+        <StatCard icon={Activity} label="Files" value={stats.files} />
         <StatCard icon={Calendar} label="Joined" value={stats.joinedDate} />
       </div>
     </div>

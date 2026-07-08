@@ -12,7 +12,7 @@ export default function Layout({ children, leftSidebar, rightSidebar }) {
     }}>
       <div className="aurora-bg" />
       {leftSidebar}
-      <div style={{
+      <div className="main-content" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',

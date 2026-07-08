@@ -1,9 +1,7 @@
-import { Wrench, Upload, Search, Image, Monitor, PenTool } from 'lucide-react'
+import { Monitor, PenTool } from 'lucide-react'
 
-export default function ToolsPanel({ onUpload, onSearch, onScreenshot, onWhiteboard }) {
+export default function ToolsPanel({ onScreenshot, onWhiteboard }) {
   const tools = [
-    { id: 'upload', label: 'Upload File', icon: Upload, onClick: onUpload },
-    { id: 'search', label: 'Web Search', icon: Search, onClick: onSearch },
     { id: 'screenshot', label: 'Screenshot', icon: Monitor, onClick: onScreenshot },
     { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, onClick: onWhiteboard },
   ]

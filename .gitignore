@@ -7,3 +7,29 @@ build/
 .cache/
 .pnpm-store/
 smoke-test/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Generated avatar outputs
+avatar-service/outputs/
+
+# Test media samples
+avatar-service/samples/
+
+# Large ML models (download or place locally instead)
+*.onnx
+*.caffemodel
+
+# Backup files
+*.bak
+*.backup.*
+
+# SQLite WAL/SHM files
+*.db-wal
+*.db-shm

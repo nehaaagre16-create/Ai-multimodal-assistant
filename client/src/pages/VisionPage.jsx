@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Camera, CameraOff, Send, Eye, Loader2, ImagePlus, X, Monitor, MonitorOff } from 'lucide-react'
+import API_BASE from '../config/api';
 
 export default function VisionPage({ cameraOn: parentCameraOn, onCameraToggle }) {
   const [cameraOn, setCameraOn] = useState(parentCameraOn || false)
@@ -108,7 +109,7 @@ export default function VisionPage({ cameraOn: parentCameraOn, onCameraToggle })
     setIsAnalyzing(true)
 
     try {
-      const res = await fetch('http://localhost:4001/api/vision', {
+      const res = await fetch(`${API_BASE}/api/vision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

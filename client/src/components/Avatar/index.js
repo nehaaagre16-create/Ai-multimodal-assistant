@@ -1,0 +1,7 @@
+export { default as Avatar } from './Avatar.jsx'
+export { default as AvatarEngine, avatarEngine } from './AvatarEngine.js'
+export { default as useAvatar } from './hooks/useAvatar.js'
+export { default as avatarPresets } from './presets.js'
+export { avatarPresetMap } from './presets.js'
+export { SpeechSynthesisAdapter } from './adapters/SpeechSynthesisAdapter.js'
+export * from './types.js'

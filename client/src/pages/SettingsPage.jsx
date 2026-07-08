@@ -8,13 +8,16 @@ const VOICE_PRESETS = [
 ]
 
 const MODEL_OPTIONS = [
-  'openai/gpt-3.5-turbo',
-  'anthropic/claude-3-haiku',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
 ]
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
-    model: 'openai/gpt-3.5-turbo',
+    model: 'gemini-2.5-flash',
     voice: 'default',
     theme: 'dark',
     autoTTS: false,
