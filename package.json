@@ -1,0 +1,20 @@
+{
+  "name": "ai-multimodal-assistant",
+  "version": "1.0.0",
+  "description": "AI Multimodal Assistant - clone and run",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../avatar-service && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:avatar\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "dev:avatar": "cd avatar-service && . .venv/bin/activate && uvicorn app:app --host 0.0.0.0 --port 8000 --reload",
+    "build": "cd client && npm run build",
+    "download:models": "cd avatar-service && . .venv/bin/activate && python download_models.py",
+    "test:e2e": "cd e2e && node run-tests.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
